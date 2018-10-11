@@ -50,3 +50,361 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+
+#include "msp.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+
+/**
+ *  Author: Nathan Gruber
+ *  Class: EGR 226 902
+ *  Instructor: Professor Zuidema
+ *  Date:10/9/18
+ *  Assignment: Lab 7 Pre-lab
+ *  Description:Preliminary Code, jumping off point for lab, still need to establish way to return an integer value to modify the PWM waveform to drive the motor.
+ *  Still stuck on how to acutally return an integer. Im sure i need ot return it into the TIMER_A0->CCR[0] = 75000-1;  function. Possibly TIMER_A0->CCR[0] = [KEYPAD INT *1000] -1; or something
+ *  of the sort, My apologies for not getting this to work 100%, i have some preliminary questions about returning the key pad accordingly and my initial wiring. Also, please note that my
+ *  initial PWM code was refrenced from our book.
+ *
+ *  Thank you Professor,
+ *
+ *  Nathan Gruber
+ **/
+
+int read_keypad();
+void write_result(int result);
+void reset(void);
+int collect_input(int entry);
+
+//Initalizing Sys Timers
+void SysTick_Init(void)
+{
+    SysTick -> CTRL = 0;            //disable SysTick During setup
+    SysTick -> LOAD = 0x00FFFFFF;   //maximum reload value
+    SysTick -> VAL = 0;             //any write to current value clears it
+    SysTick -> CTRL = 0x00000005;    //enable SysTick, CPU clk, no interrupts
+}
+
+//Initalizing Sys Timers
+void SysTick_delay(uint16_t delay)
+{
+    SysTick -> LOAD = ((delay*3000) - 1);  // 1ms count down to zero
+    SysTick -> VAL = 0;                    // any write to CVR clears it
+                                           // and COUNTFLAG in CSR
+ // Wait for flag to be SET (Timeout happened)
+    while ((SysTick -> CTRL & 0x00010000) == 0);
+}
+
+void main(void)
+{
+	WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;		// stop watchdog timer
+
+	 SysTick_Init(); //Initialize SysTick Timer
+
+	 //INIT FOR PINS FOR KEYPAD
+	    P4->SEL0 &= ~(BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7); //sets up P4 with 1-7
+	    P4->SEL1 &= ~(BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7); // sets up P4 with 1-7
+	    P4->DIR &= ~(BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7); // sets up P4 with 1-7
+	    P4->REN |= (BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7); //enable internal resistor on P4 1-7
+	    P4->OUT |=  (BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7); // make the internal resistor pull up to 3.3V (default state is a 1 now)
+
+	//INIT FOR PINS FOR MOTOR==========================================================================================================
+	//ATTENTION PROFESSOR ZUIDEMA, THIS IS TAKEN FROM THE PG 306 OF OUR BOOK, PLEASE NOTE THE CODE HAS BEEN ADJUSTED TO ACCOUNT FOR A
+	// Configure 2.7 as Timer A0.4 output
+	P2->SEL0 |= 0x80;
+	P2->SEL1 &= ~0x80;
+	P2->DIR |= 0x80;
+ int PMW_Value;
+
+	//Configure TimerA0.4 as PWM
+	TIMER_A0->CCR[0] = 37500-1; //This is the PWM period   3,000,000/75,000 = 40 Hz
+	TIMER_A0->CCR[4] = (37500) * (PMW_Value/100.0); //CCR4 PWM duty cycle
+	TIMER_A0->CCTL[4] = 0xE0;   //CCR4 reset/set mode
+	TIMER_A0->CTL  = 0b0000001001010100;    //use SMCLK, count up, clear TAOR register
+
+ int value ;
+
+
+
+	while(1)
+	{
+	   // P2->OUT |= 0x80;
+
+	    value = read_keypad(); //inputs the calculated value from the keypad into the int value to be used in other parts of the program.
+
+	    write_result(value);//Will print the result to the user
+
+	    PMW_Value = collect_input(value); //stores the value to
+	}
+}
+
+int read_keypad()
+{
+
+    int row = 0;
+    int column = -1;
+    int value = 0;
+
+
+    P4-> OUT &= ~BIT3; ///sets column 0 to 0
+    P4-> DIR |= BIT3;
+    {
+        SysTick_delay(30);
+        if(!(P4->IN & BIT7)) //Row 0, This is the number 1 on the keypad, value of 1
+        {
+            while(!((P4->IN & BIT7) == BIT7)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+               SysTick_delay(30);
+               printf("nothing is pressed\n");
+            }
+
+            row=0;  //row on pad
+            column = 0; //column on pad
+        }
+
+        if(!(P4->IN & BIT6))  //Row 1, this is the number 4 on the keypad, value of 4
+        {
+            while(!((P4->IN & BIT6) == BIT6)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=1;  //row on pad
+            column = 0; //column on pad
+        }
+        if(!(P4->IN & BIT5))  //Row 2, this is the number 7 on the keypad, value of 7
+        {
+            while(!((P4->IN & BIT5) == BIT5)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=2;  //row on pad
+            column = 0; //column on pad
+        }
+        if(!(P4->IN & BIT4)) //Row 3, this is the asteric on the keypad, value of 12
+        {
+            while(!((P4->IN & BIT4) == BIT4)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=3;  //row on pad
+            column = 0; //column on pad
+        }
+            reset(); //Resets the pins so that the program can read for additional key pad presses.
+    }
+
+        P4-> OUT &= ~BIT2; ///sets column 1 to 0 SETS TO OUTPUT
+        P4-> DIR |= BIT2;
+    {
+        SysTick_delay(30);
+        if(!(P4->IN & BIT7)) //Row 0, This is the number 2 on the keypad, value of 2
+        {
+            while(!((P4->IN & BIT7) == BIT7)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=0; //row on pad
+            column = 1; //column on pad
+        }
+
+        if(!(P4->IN & BIT6)) //Row 1,  This is the number 5 on the keypad, value of 5
+        {
+            while(!((P4->IN & BIT6) == BIT6)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=1; //row on pad
+            column = 1; //column on pad
+        }
+
+        if(!(P4->IN & BIT5)) //Row 2, This is the number 8 on the keypad, value of 8
+        {
+            while(!((P4->IN & BIT5) == BIT5)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=2; //row on pad
+            column = 1; //column on pad
+         }
+
+        if(!(P4->IN & BIT4)) //Row 3, This is the number 0 on the keypad, value of 0
+        {
+            while(!((P4->IN & BIT4) == BIT4)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+            {
+                SysTick_delay(30);
+                printf("nothing is pressed\n");
+            }
+
+            row=3; //row on pad
+            column = 1; //column on pad
+        }
+
+        reset(); //Resets the pins so that the program can read for additional key pad presses.
+    }
+
+    P4-> OUT &= ~BIT1; ///sets column 2 to 0 SETS TO OUTPUT
+    P4-> DIR |= BIT1;
+
+    {
+       SysTick_delay(30);
+       if(!(P4->IN & BIT7)) //Row 0,  This is the number 3 on the keypad, value of 3
+       {
+           while(!((P4->IN & BIT7) == BIT7)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+           {
+               SysTick_delay(30);
+               printf("nothing is pressed\n");
+           }
+
+           row=0; //row on pad
+           column = 2; //column on pad
+       }
+
+       if(!(P4->IN & BIT6)) //Row 1, This is the number 6 on the keypad, value of 6
+       {
+           while(!((P4->IN & BIT6) == BIT6)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+           {
+               SysTick_delay(30);
+               printf("nothing is pressed\n");
+           }
+
+           row=1; //row on pad
+           column = 2; //column on pad
+       }
+
+       if(!(P4->IN & BIT5)) //Row 2, This is the number 9 on the keypad, value of 9
+       {
+           while(!((P4->IN & BIT5) == BIT5)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+           {
+               SysTick_delay(30);
+               printf("nothing is pressed\n");
+           }
+
+           row=2; //row on pad
+           column = 2; //column on pad
+       }
+
+       if(!(P4->IN & BIT4)) //Row 3, This is the pound sign on the keypad, value of 11
+       {
+           while(!((P4->IN & BIT4) == BIT4)) //Causes the program to wait until the button is released to record a value. also prevents button bouncing entirely.
+           {
+               SysTick_delay(30);
+               printf("nothing is pressed\n");
+           }
+
+           row=3; //row on pad
+           column = 2; //column on pad
+       }
+       reset(); //Resets the pins so that the program can read for additional key pad presses.
+    }
+
+    //Formula that calculates the value number for which key on which column and row is pressed
+    value = ((column + 1) + (row * 3));
+
+    if(value == 11)
+    {
+        value=0;
+    }
+
+    //Return the value calculated by the formula above to be displayed to the user
+    return value;
+}
+
+//Reset function that resets all rows and pins
+void reset(void)
+{
+    P4->DIR &= ~(BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7);
+    P4->OUT |= (BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7); // make the internal resistor pull up to 3.3V (default state is a 1 now)
+}
+
+//function that writes the value to the user
+void write_result(int result)
+{
+    if(result <= 0) //If nothing is pressed the user will be identified as such
+    {
+        printf("nothing is pressed\n");
+    }
+
+    if(result <= 9 && result > 0 ) //what ever number, 0 through 9 is pressed, will be returned to the user as such
+    {
+        printf("The button pressed is %d \n" , result);
+    }
+
+    if(result == 10) //If the formula returns a 10, this means the asteric button has been pressed
+    {
+        printf("The button pressed is ** \n");
+    }
+
+    if(result == 11) //If the 2nd column 4th row is pressed, the key itself is a numerical vale of zero but a calculated value of 11. As such the number returned to the user will be 0
+    {
+        printf("The button pressed is 0 \n");
+    }
+
+    if(result == 12) //If the formula returns a 12, the pound sign will be returned.
+    {
+        printf("The button is ## \n");
+    }
+
+}
+
+
+
+//Function that collects and stores 4 digits into an array. The array is set up so that no matter how many buttons are pressed the returned
+// 4 digit array thats returned will always be the last 4 digits pressed. An asterick will return an invalid entry
+int collect_input(int entry)
+{
+
+   static int pincode[3];
+
+    if(entry == 12) //When the pound sign is pressed, the program will return the last 4 entered digits
+    {
+        int PWM;
+
+       printf("\n\nThe 3 digit pin code is %d%d%d\n\n", pincode[0], pincode[1], pincode[2]);
+
+       PWM = ((pincode[0]*100) + (pincode[1]*10) + (pincode[2]*1));
+
+        printf("\nthe PWM integer is %d\n", PWM);
+
+        return PWM;
+
+        reset();
+    }
+
+
+    if(entry== 10) //If the Asteric Symbol is pressed, nothing will be returned
+    {
+        printf("\nINVALID ENTRY\n");
+
+        reset();
+    }
+
+
+if((entry <=9 || entry == 11) && entry > 0)//If an entry is pressed 0-9, the number will be stored in the program.
+{
+
+    int i;
+
+
+    for(i=0; i<2; i++)
+    {
+        pincode[i] =pincode[i+1];
+    }
+
+    pincode[2] = entry;
+
+}
+
+}
